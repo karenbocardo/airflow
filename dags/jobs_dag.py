@@ -5,6 +5,7 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.dummy import DummyOperator
 from airflow.operators.python_operator import BranchPythonOperator
+from airflow.operators.bash import BashOperator
 
 config = {
     'dag_id_1': {'schedule_interval': None, 
@@ -36,6 +37,11 @@ for id, dict in config.items():
             op_kwargs={'dag_id': id, 'database': 'example'}
         )
 
+        get_user = BashOperator(
+            task_id="get_current_user",
+            bash_command="whoami",
+        )
+
         check = BranchPythonOperator(
             task_id='check_table_exists',
             python_callable=check_table_exist
@@ -44,11 +50,12 @@ for id, dict in config.items():
         create = DummyOperator(task_id='create_table')
 
         insert = DummyOperator(task_id='insert_row', 
-                               trigger_rule='none_failed')
+                               trigger_rule='none_failed') # already done
 
         query = DummyOperator(task_id='query_table')
 
-        start >> check
+        start >> get_user
+        get_user >> check 
         check >> [create, insert]
         create >> insert
         insert >> query
