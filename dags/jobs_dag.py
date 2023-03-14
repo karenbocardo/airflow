@@ -6,6 +6,7 @@ from airflow.operators.python import PythonOperator
 from airflow.operators.dummy import DummyOperator
 from airflow.operators.python_operator import BranchPythonOperator
 from airflow.operators.bash import BashOperator
+from airflow.models.xcom import XCom
 
 config = {
     'dag_id_1': {'schedule_interval': None, 
@@ -29,6 +30,10 @@ def check_table_exist():
 def log_information(dag_id, database):
     logging.info(f'{dag_id} start processing tables in database: {database}')
 
+def send_message(**context):
+    run_id = context['run_id']
+    context['ti'].xcom_push(key='message', value=f"{run_id} ended")
+
 for id, dict in config.items():
     with DAG(id, start_date=dict['start_date'], schedule_interval=dict['schedule_interval']) as dag:
         start = PythonOperator(
@@ -50,9 +55,12 @@ for id, dict in config.items():
         create = DummyOperator(task_id='create_table')
 
         insert = DummyOperator(task_id='insert_row', 
-                               trigger_rule='none_failed') # already done
+                               trigger_rule='none_failed')
 
-        query = DummyOperator(task_id='query_table')
+        query = PythonOperator(task_id='query_table',
+                            python_callable=send_message,
+                            provide_context=True,
+                        )
 
         start >> get_user
         get_user >> check 
