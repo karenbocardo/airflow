@@ -16,9 +16,9 @@ path = Variable.get('path', default_var='/opt/airflow/temp/run')
 dag_to_trigger = 'dag_id_3'
 
 def print_result(**context):
-    data_received = context['ti'].xcom_pull(key='message')
-    logging.info(data_received)
-    logging.info(context)
+    data_received = context['ti'].xcom_pull(dag_id=dag_to_trigger, task_ids='query_table', key='row_count')
+    logging.info(f"data recieved: {data_received}")
+    logging.info(f"context: {context}")
 
 def pull_logical_date(self,**kwargs):
     try:
@@ -49,7 +49,8 @@ def subdag(parent_dag_id, child_dag_id, start_date, schedule_interval):
 
         result = PythonOperator(
             task_id='print_result',
-            python_callable=print_result
+            python_callable=print_result,
+            provide_context=True
         )
 
         rm_file = BashOperator(
@@ -60,7 +61,7 @@ def subdag(parent_dag_id, child_dag_id, start_date, schedule_interval):
         # Define the BashOperator to create the file
         finished_file = BashOperator(
             task_id='create_finished_file',
-            bash_command='touch finished_{{ ts_nodash }}'
+            bash_command='touch /opt/airflow/res/finished_{{ ts_nodash }}'
         )
 
         sensor_dag >> result >> rm_file >> finished_file

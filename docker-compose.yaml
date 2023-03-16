@@ -15,7 +15,6 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-
 # Basic Airflow cluster configuration for CeleryExecutor with Redis and PostgreSQL.
 #
 # WARNING: This configuration is for local development. Do not use it in a production deployment.
@@ -50,12 +49,12 @@ x-airflow-common:
   # build: .
   environment:
     &airflow-common-env
-    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     # For backward compatibility, with Airflow <2.3
     AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
-#    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
-#    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
@@ -69,16 +68,20 @@ x-airflow-common:
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     &airflow-common-depends-on
+    redis:
+      condition: service_healthy
     postgres:
       condition: service_healthy
-
 services:
   postgres:
-    image: postgres:13
+    image: postgres
     environment:
+      DATABASE_HOST: 127.0.0.1
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
+    ports:
+      - "5432:5432"
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
     healthcheck:
@@ -86,7 +89,27 @@ services:
       interval: 5s
       retries: 5
     restart: always
-
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin4_container
+    restart: always
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: airflow@airflow.com
+      PGADMIN_DEFAULT_PASSWORD: airflow
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+  redis:
+    image: redis:latest
+    expose:
+      - 6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 30s
+      retries: 50
+    restart: always
   airflow-webserver:
     <<: *airflow-common
     command: webserver
@@ -98,11 +121,19 @@ services:
       timeout: 10s
       retries: 5
     restart: always
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./data:/opt/airflow/data
+      - ./temp:/opt/airflow/temp
+    environment:
+      <<: *airflow-common-env
+      AIRFLOW__CORE__HIDE_SENSITIVE_VAR_CONN_FIELDS: 'False'
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
-
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
@@ -112,11 +143,47 @@ services:
       timeout: 10s
       retries: 5
     restart: always
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./data:/opt/airflow/data
+      - ./temp:/opt/airflow/temp
+
+    environment:
+      <<: *airflow-common-env
+      AIRFLOW__CORE__HIDE_SENSITIVE_VAR_CONN_FIELDS: 'False'
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+  airflow-worker:
+    <<: *airflow-common
+    command: celery worker
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    environment:
+      <<: *airflow-common-env
+      # Required to handle warm shutdown of the celery workers properly
+      # See https://airflow.apache.org/docs/docker-stack/entrypoint.html#signal-propagation
+      DUMB_INIT_SETSID: "0"
+    restart: always
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./data:/opt/airflow/data
+      - ./temp:/opt/airflow/temp
 
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
   airflow-triggerer:
     <<: *airflow-common
     command: triggerer
@@ -126,11 +193,17 @@ services:
       timeout: 10s
       retries: 5
     restart: always
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./data:/opt/airflow/data
+      - ./temp:/opt/airflow/temp
+
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
-
   airflow-init:
     <<: *airflow-common
     entrypoint: /bin/bash
@@ -208,7 +281,6 @@ services:
     user: "0:0"
     volumes:
       - ${AIRFLOW_PROJ_DIR:-.}:/sources
-
   airflow-cli:
     <<: *airflow-common
     profiles:
@@ -221,6 +293,26 @@ services:
       - bash
       - -c
       - airflow
-
+  # You can enable flower by adding "--profile flower" option e.g. docker-compose --profile flower up
+  # or by explicitly targeted on the command line e.g. docker-compose up flower.
+  # See: https://docs.docker.com/compose/profiles/
+  flower:
+    <<: *airflow-common
+    command: celery flower
+    profiles:
+      - flower
+    ports:
+      - 5555:5555
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
 volumes:
   postgres-db-volume:
+  pgadmin-data:
