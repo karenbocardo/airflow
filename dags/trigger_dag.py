@@ -16,11 +16,11 @@ path = Variable.get('path', default_var='/opt/airflow/temp/run')
 dag_to_trigger = 'dag_id_3'
 
 def print_result(**context):
-    data_received = context['ti'].xcom_pull(dag_id=dag_to_trigger, task_ids='query_table', key='row_count')
+    data_received = context['ti'].xcom_pull(dag_id=dag_to_trigger, task_ids='query_table', key='return_value')
     logging.info(f"data recieved: {data_received}")
     logging.info(f"context: {context}")
 
-def pull_logical_date(self,**kwargs):
+def pull_logical_date(self, **kwargs):
     try:
         value = kwargs['ti'].xcom_pull(dag_id='trigger_dag', task_ids='trigger_run', key='trigger_execution_date_iso', include_prior_dates=True)
         logging.info(value)
@@ -47,6 +47,9 @@ def subdag(parent_dag_id, child_dag_id, start_date, schedule_interval):
             poke_interval=10
         )
 
+        '''
+         Inside the  “print the result” task: get this Xcom with xcom_pull() and print the read value to the log. 
+        '''
         result = PythonOperator(
             task_id='print_result',
             python_callable=print_result,
@@ -61,7 +64,7 @@ def subdag(parent_dag_id, child_dag_id, start_date, schedule_interval):
         # Define the BashOperator to create the file
         finished_file = BashOperator(
             task_id='create_finished_file',
-            bash_command='touch /opt/airflow/res/finished_{{ ts_nodash }}'
+            bash_command='touch /opt/airflow/temp/finished_{{ ts_nodash }}'
         )
 
         sensor_dag >> result >> rm_file >> finished_file
@@ -72,7 +75,7 @@ def subdag(parent_dag_id, child_dag_id, start_date, schedule_interval):
 with DAG('trigger_dag', start_date=datetime(2022, 11, 11), schedule_interval=None) as dag:
     sensor_task = FileSensor(task_id= 'file_sensor_task', 
                              poke_interval= 1,  
-                             filepath= path,
+                             filepath= path, 
                              fs_conn_id= 'fs_default')
     
     trigger_dagrun = TriggerDagRunOperator(
