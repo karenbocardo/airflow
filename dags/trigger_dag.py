@@ -48,7 +48,7 @@ def subdag(parent_dag_id, child_dag_id, start_date, schedule_interval):
         )
 
         '''
-         Inside the  “print the result” task: get this Xcom with xcom_pull() and print the read value to the log. 
+         Inside the  “print the result” task: get this Xcom with xcom_pull() and print the read value to the log. n
         '''
         result = PythonOperator(
             task_id='print_result',

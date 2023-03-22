@@ -10,6 +10,7 @@ from airflow.models.xcom import XCom
 from airflow.hooks.postgres_hook import PostgresHook
 from airflow.operators.postgres_operator import PostgresOperator
 from airflow.utils.trigger_rule import TriggerRule
+from custom_operator.postgres_operator import PostgreSQLCountRows
 
 
 config = {
@@ -42,28 +43,6 @@ def check_table_exist(sql_to_check_table_exist, table_name):
 
 def log_information(dag_id, database):
     logging.info(f'{dag_id} start processing tables in database: {database}')
-
-def get_row_count(table_name, **context):
-    """
-    A Python callable that uses PostgreSQLHook to get the number of rows in a table.
-    """
-    # Create a PostgresHook instance
-    hook = PostgresHook(postgres_conn_id='postgres_default')
-    
-    # Build the query to get the row count
-    query = f"SELECT COUNT(*) FROM {table_name}"
-    
-    # Execute the query and get the result
-    with hook.get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query)
-            result = cur.fetchone()[0]
-    
-    # send message to xcom
-    context['ti'].xcom_push(key='row_count', value=result)
-    
-    # Return the row count
-    return result
 
 for id, dict in config.items():
     with DAG(id, start_date=dict['start_date'], schedule_interval=dict['schedule_interval']) as dag:
@@ -99,11 +78,10 @@ for id, dict in config.items():
                                 parameters=(custom_id_value, timestamp_value),
                                 trigger_rule='all_done')
 
-        query = PythonOperator(task_id='query_table',
-                            python_callable=get_row_count,
-                            provide_context=True,
-                            op_kwargs={'table_name': 'table_name'}
-                        )
+        query = PostgreSQLCountRows(task_id='query_table',
+                            postgres_conn_id='postgres_default',
+                            table_name='table_name'
+                            )
 
         start >> get_user
         get_user >> check 
