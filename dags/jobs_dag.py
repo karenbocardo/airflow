@@ -49,7 +49,7 @@ for id, dict in config.items():
         start = PythonOperator(
             task_id='print_process_start',
             python_callable=log_information,
-            op_kwargs={'dag_id': id, 'database': 'example'}
+            op_kwargs={'dag_id': id, 'database': 'public'}
         )
 
         get_user = BashOperator(
