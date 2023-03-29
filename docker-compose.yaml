@@ -315,4 +315,5 @@ services:
         condition: service_completed_successfully
 volumes:
   postgres-db-volume:
-  pgadmin-data:
+  pgadmin-data:0
+  

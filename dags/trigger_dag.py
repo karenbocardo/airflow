@@ -10,7 +10,8 @@ from airflow.operators.bash_operator import BashOperator
 from airflow.operators.subdag_operator import SubDagOperator
 from airflow.sensors.external_task_sensor import ExternalTaskSensor
 from airflow.operators.python import PythonOperator
-
+from slack import WebClient
+from slack.errors import SlackApiError
 
 path = Variable.get('path', default_var='/opt/airflow/temp/run')
 dag_to_trigger = 'dag_id_3'
@@ -27,6 +28,37 @@ def pull_logical_date(self, **kwargs):
         return datetime.fromisoformat(value)
     except Exception as e:
         return logging.info('Pulling execution date failed')
+
+def send_slack_message(**context):
+    # Slack API token
+    SLACK_TOKEN = 'xoxb-5000400506163-5001471941862-B3ZLGTg70Kz05MnnBKs2f3nS'
+
+    # Create a WebClient instance using the Slack API token
+    client = WebClient(token=SLACK_TOKEN)
+
+    # Set the channel ID of the channel you want to send the message to
+    channel_id = 'airflow'
+
+    # Get the DAG ID and execution date
+    dag_id = context['dag'].dag_id
+    execution_date = context['execution_date']
+
+    # Construct the message to send
+    message = f"Airflow DAG {dag_id} has started execution on {execution_date}"
+
+    try:
+        # Call the chat.postMessage API method using the WebClient instance
+        response = client.chat_postMessage(
+            channel=channel_id,
+            text=message
+        )
+
+        # Log the response if successful
+        if response['ok']:
+            print("Slack message sent successfully!")
+    except SlackApiError as e:
+        # Log any errors if the API call fails
+        print("Error sending Slack message: {}".format(e))
 
 # Define the SubDag
 def subdag(parent_dag_id, child_dag_id, start_date, schedule_interval):
@@ -67,7 +99,13 @@ def subdag(parent_dag_id, child_dag_id, start_date, schedule_interval):
             bash_command='touch /opt/airflow/temp/finished_{{ ts_nodash }}'
         )
 
-        sensor_dag >> result >> rm_file >> finished_file
+        alert = PythonOperator(
+            task_id='alert_slack',
+            python_callable=send_slack_message,
+            provide_context=True
+        )
+
+        sensor_dag >> result >> rm_file >> finished_file >> alert
 
         # Return the SubDag
         return subdag_dag
