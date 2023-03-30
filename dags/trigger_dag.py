@@ -14,6 +14,7 @@ from slack import WebClient
 from slack.errors import SlackApiError
 
 path = Variable.get('path', default_var='/opt/airflow/temp/run')
+SLACK_TOKEN = Variable.get('slack_token', default_var='x')
 dag_to_trigger = 'dag_id_3'
 
 def print_result(**context):
@@ -31,7 +32,8 @@ def pull_logical_date(self, **kwargs):
 
 def send_slack_message(**context):
     # Slack API token
-    SLACK_TOKEN = 'xoxb-5000400506163-5001471941862-B3ZLGTg70Kz05MnnBKs2f3nS'
+    # SLACK_TOKEN = 'xoxb-5000400506163-5025096779302-g5Ah31axGZiL3B0AGslPjlPf'
+    logging.info(SLACK_TOKEN)
 
     # Create a WebClient instance using the Slack API token
     client = WebClient(token=SLACK_TOKEN)

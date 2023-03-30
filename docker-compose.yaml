@@ -40,6 +40,11 @@
 # Feel free to modify this file to suit your needs.
 ---
 version: '3'
+
+networks:
+  airflow:
+    driver: bridge
+
 x-airflow-common:
   &airflow-common
   # In order to add custom dependencies or upgrade provider packages you can use your extended image.
@@ -313,7 +318,18 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+  vault:
+    image: vault:latest
+    environment:
+      - VAULT_ADDR=http://127.0.0.1:8200
+      - VAULT_API_ADDR=http://127.0.0.1:8200
+      - VAULT_ADDRESS=http://127.0.0.1:8200
+      - VAULT_DEV_ROOT_TOKEN_ID=ZyrP7NtNw0hbLUqu7N3IlTdO
+    expose:
+      - 8200
+    ports:
+      - 8200:8200
+    command: server -dev
 volumes:
   postgres-db-volume:
-  pgadmin-data:0
-  
+  pgadmin-data:
