@@ -14,7 +14,7 @@ from slack import WebClient
 from slack.errors import SlackApiError
 
 path = Variable.get('path', default_var='/opt/airflow/temp/run')
-SLACK_TOKEN = Variable.get('slack_token', default_var='x')
+SLACK_TOKEN = Variable.get('slack_token', default_var='xoxb-5000400506163-5025096779302-0h9sHomDJ4UoIuRJkI4sGw44')
 dag_to_trigger = 'dag_id_3'
 
 def print_result(**context):
@@ -78,7 +78,8 @@ def subdag(parent_dag_id, child_dag_id, start_date, schedule_interval):
             external_task_id=None,
             allowed_states=['success'],
             execution_date_fn=pull_logical_date,
-            poke_interval=10
+            poke_interval=10,
+            
         )
 
         '''

@@ -49,12 +49,14 @@ for id, dict in config.items():
         start = PythonOperator(
             task_id='print_process_start',
             python_callable=log_information,
-            op_kwargs={'dag_id': id, 'database': 'public'}
+            op_kwargs={'dag_id': id, 'database': 'public'},
+            queue='queue-capstone'
         )
 
         get_user = BashOperator(
             task_id="get_current_user",
-            bash_command="whoami"
+            bash_command="whoami",
+            queue='queue-capstone'
         )
 
         table_name = "table_name"
@@ -62,13 +64,15 @@ for id, dict in config.items():
                                     python_callable=check_table_exist,
                                     op_args=["SELECT * FROM information_schema.tables "
                                             "WHERE table_schema = '{}'"
-                                            "AND table_name = '{}';", table_name])
+                                            "AND table_name = '{}';", table_name],
+                                            queue='queue-capstone')
         
         sql_create_table = '''CREATE TABLE table_name(custom_id integer NOT NULL, 
                     user_name VARCHAR (50) NOT NULL, timestamp TIMESTAMP NOT NULL);'''
         create = PostgresOperator(task_id='create_table',
                                         postgres_conn_id='postgres_default',
-                                        sql=sql_create_table)
+                                        sql=sql_create_table,
+                                        queue='queue-capstone')
 
         custom_id_value = uuid.uuid4().int % 123456789
         timestamp_value = datetime.now()
@@ -76,12 +80,13 @@ for id, dict in config.items():
                                 postgres_conn_id='postgres_default',
                                 sql='''INSERT INTO table_name VALUES(%s, '{{ ti.xcom_pull(task_ids='get_current_user', key='return_value') }}', %s);''',
                                 parameters=(custom_id_value, timestamp_value),
-                                trigger_rule='all_done')
+                                trigger_rule='all_done',
+                                queue='queue-capstone')
 
         query = PostgreSQLCountRows(task_id='query_table',
                             postgres_conn_id='postgres_default',
-                            table_name='table_name'
-                            )
+                            table_name='table_name',
+                            queue='queue-capstone')
 
         start >> get_user
         get_user >> check 
