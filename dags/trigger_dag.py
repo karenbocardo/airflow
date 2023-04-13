@@ -14,7 +14,7 @@ from slack import WebClient
 from slack.errors import SlackApiError
 
 path = Variable.get('path', default_var='/opt/airflow/temp/run')
-SLACK_TOKEN = Variable.get('slack_token', default_var='xoxb-5000400506163-5025096779302-0h9sHomDJ4UoIuRJkI4sGw44')
+SLACK_TOKEN = Variable.get('slack_token')
 dag_to_trigger = 'dag_id_3'
 
 def print_result(**context):

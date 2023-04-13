@@ -71,6 +71,7 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
     - ${AIRFLOW_PROJ_DIR:-.}/temp:/opt/airflow/temp
     - ${AIRFLOW_PROJ_DIR:-.}/airflow.cfg:/opt/airflow/airflow.cfg
+    - ${AIRFLOW_PROJ_DIR:-.}/.env:/opt/airflow/.env
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     &airflow-common-depends-on
@@ -134,6 +135,7 @@ services:
       - ./data:/opt/airflow/data
       - ./temp:/opt/airflow/temp
       - ./airflow.cfg:/opt/airflow/airflow.cfg
+      - ./.env:/opt/airflow/.env
     environment:
       <<: *airflow-common-env
       AIRFLOW__CORE__HIDE_SENSITIVE_VAR_CONN_FIELDS: 'False'
@@ -157,6 +159,7 @@ services:
       - ./data:/opt/airflow/data
       - ./temp:/opt/airflow/temp
       - ./airflow.cfg:/opt/airflow/airflow.cfg
+      - ./.env:/opt/airflow/.env
 
     environment:
       <<: *airflow-common-env
@@ -238,6 +241,7 @@ services:
       - ./data:/opt/airflow/data
       - ./temp:/opt/airflow/temp
       - ./airflow.cfg:/opt/airflow/airflow.cfg
+      - ./.env:/opt/airflow/.env
 
     depends_on:
       <<: *airflow-common-depends-on
