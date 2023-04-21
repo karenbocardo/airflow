@@ -13,7 +13,9 @@ from airflow.operators.python import PythonOperator
 from slack import WebClient
 from slack.errors import SlackApiError
 
-path = Variable.get('path', default_var='/opt/airflow/temp/run')
+from custom_operator.smart_file_sensor import SmartFileSensor
+
+path = Variable.get('path', default_var='/opt/airflow/data/run')
 SLACK_TOKEN = Variable.get('slack_token')
 dag_to_trigger = 'dag_id_3'
 
@@ -99,7 +101,7 @@ def subdag(parent_dag_id, child_dag_id, start_date, schedule_interval):
         # Define the BashOperator to create the file
         finished_file = BashOperator(
             task_id='create_finished_file',
-            bash_command='touch /opt/airflow/temp/finished_{{ ts_nodash }}'
+            bash_command='touch /opt/airflow/data/finished_{{ ts_nodash }}'
         )
 
         alert = PythonOperator(
@@ -114,10 +116,14 @@ def subdag(parent_dag_id, child_dag_id, start_date, schedule_interval):
         return subdag_dag
 
 with DAG('trigger_dag', start_date=datetime(2022, 11, 11), schedule_interval=None) as dag:
-    sensor_task = FileSensor(task_id= 'file_sensor_task', 
-                             poke_interval= 1,  
-                             filepath= path, 
-                             fs_conn_id= 'fs_default')
+    sensors = [
+        SmartFileSensor(
+            task_id=f'file_sensor_{sensor_id}',
+            filepath=path,
+            fs_conn_id='fs_default',
+            poke_interval=1
+        ) for sensor_id in range(1, 10)
+    ]
     
     trigger_dagrun = TriggerDagRunOperator(
         task_id='trigger_run',
@@ -130,5 +136,5 @@ with DAG('trigger_dag', start_date=datetime(2022, 11, 11), schedule_interval=Non
         subdag=subdag('trigger_dag', 'subdag_task', datetime(2023, 3, 13), timedelta(days=1))
     )
 
-    sensor_task >> trigger_dagrun
+    sensors >> trigger_dagrun
     trigger_dagrun >> subdag_task

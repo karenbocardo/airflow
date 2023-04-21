@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 #
+
 # Basic Airflow cluster configuration for CeleryExecutor with Redis and PostgreSQL.
 #
 # WARNING: This configuration is for local development. Do not use it in a production deployment.
@@ -38,6 +39,7 @@
 #                                Default: ''
 #
 # Feel free to modify this file to suit your needs.
+
 ---
 version: '3'
 
@@ -52,6 +54,8 @@ x-airflow-common:
   # and uncomment the "build" line below, Then run `docker-compose build` to build the images.
   image: ${AIRFLOW_IMAGE_NAME:-capstone}
   # build: .
+  env_file:
+      - .env
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
@@ -68,10 +72,9 @@ x-airflow-common:
   volumes:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
-    - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
-    - ${AIRFLOW_PROJ_DIR:-.}/temp:/opt/airflow/temp
     - ${AIRFLOW_PROJ_DIR:-.}/airflow.cfg:/opt/airflow/airflow.cfg
     - ${AIRFLOW_PROJ_DIR:-.}/.env:/opt/airflow/.env
+
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     &airflow-common-depends-on
@@ -79,6 +82,7 @@ x-airflow-common:
       condition: service_healthy
     postgres:
       condition: service_healthy
+
 services:
   postgres:
     image: postgres
@@ -96,6 +100,7 @@ services:
       interval: 5s
       retries: 5
     restart: always
+  
   pgadmin:
     image: dpage/pgadmin4
     container_name: pgadmin4_container
@@ -107,6 +112,21 @@ services:
       PGADMIN_DEFAULT_PASSWORD: airflow
     volumes:
       - pgadmin-data:/var/lib/pgadmin
+
+  vault:
+    image: vault:latest
+    environment:
+      - VAULT_ADDR=http://127.0.0.1:8200
+      - VAULT_API_ADDR=http://127.0.0.1:8200
+      - VAULT_ADDRESS=http://127.0.0.1:8200
+      - VAULT_DEV_ROOT_TOKEN_ID=ZyrP7NtNw0hbLUqu7N3IlTdO
+    expose:
+      - 8200
+    ports:
+      - 8200:8200
+    command: server -dev
+
+
   redis:
     image: redis:latest
     expose:
@@ -117,11 +137,12 @@ services:
       timeout: 30s
       retries: 50
     restart: always
+
   airflow-webserver:
     <<: *airflow-common
     command: webserver
     ports:
-      - "8080:8080"
+      - 8080:8080
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
       interval: 10s
@@ -131,11 +152,12 @@ services:
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
-      - ./plugins:/opt/airflow/plugins
       - ./data:/opt/airflow/data
-      - ./temp:/opt/airflow/temp
       - ./airflow.cfg:/opt/airflow/airflow.cfg
       - ./.env:/opt/airflow/.env
+    env_file:
+      - .env
+
     environment:
       <<: *airflow-common-env
       AIRFLOW__CORE__HIDE_SENSITIVE_VAR_CONN_FIELDS: 'False'
@@ -143,6 +165,7 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
@@ -155,12 +178,11 @@ services:
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
-      - ./plugins:/opt/airflow/plugins
       - ./data:/opt/airflow/data
-      - ./temp:/opt/airflow/temp
       - ./airflow.cfg:/opt/airflow/airflow.cfg
       - ./.env:/opt/airflow/.env
-
+    env_file:
+      - .env
     environment:
       <<: *airflow-common-env
       AIRFLOW__CORE__HIDE_SENSITIVE_VAR_CONN_FIELDS: 'False'
@@ -168,9 +190,10 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+
   airflow-worker:
     <<: *airflow-common
-    command: celery worker 
+    command: celery worker
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -187,19 +210,19 @@ services:
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
-      - ./plugins:/opt/airflow/plugins
       - ./data:/opt/airflow/data
-      - ./temp:/opt/airflow/temp
       - ./airflow.cfg:/opt/airflow/airflow.cfg
-
+    env_file:
+      - .env
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
 
-  airflow-worker2:
+  
+  airflow-worker-2:
     <<: *airflow-common
-    command: celery worker -q queue-capstone
+    command: celery worker -q queue_capstone
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -216,15 +239,16 @@ services:
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
-      - ./plugins:/opt/airflow/plugins
       - ./data:/opt/airflow/data
-      - ./temp:/opt/airflow/temp
       - ./airflow.cfg:/opt/airflow/airflow.cfg
-
+    env_file:
+      - .env
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+
+
   airflow-triggerer:
     <<: *airflow-common
     command: triggerer
@@ -237,16 +261,16 @@ services:
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
-      - ./plugins:/opt/airflow/plugins
       - ./data:/opt/airflow/data
-      - ./temp:/opt/airflow/temp
       - ./airflow.cfg:/opt/airflow/airflow.cfg
       - ./.env:/opt/airflow/.env
-
+    env_file:
+      - .env
     depends_on:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+
   airflow-init:
     <<: *airflow-common
     entrypoint: /bin/bash
@@ -321,9 +345,12 @@ services:
       _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
       _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
       _PIP_ADDITIONAL_REQUIREMENTS: ''
+
     user: "0:0"
     volumes:
       - ${AIRFLOW_PROJ_DIR:-.}:/sources
+      - ./airflow.cfg:/opt/airflow/airflow.cfg
+
   airflow-cli:
     <<: *airflow-common
     profiles:
@@ -336,6 +363,7 @@ services:
       - bash
       - -c
       - airflow
+
   # You can enable flower by adding "--profile flower" option e.g. docker-compose --profile flower up
   # or by explicitly targeted on the command line e.g. docker-compose up flower.
   # See: https://docs.docker.com/compose/profiles/
@@ -343,7 +371,7 @@ services:
     <<: *airflow-common
     command: celery flower
     ports:
-      - "5555:5555"
+      - 5555:5555
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
       interval: 10s
@@ -354,20 +382,7 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
-  vault:
-    image: vault:latest
-    environment:
-      - VAULT_ADDR=http://127.0.0.1:8200
-      - VAULT_API_ADDR=http://127.0.0.1:8200
-      - VAULT_ADDRESS=http://127.0.0.1:8200
-      - VAULT_DEV_ROOT_TOKEN_ID=ZyrP7NtNw0hbLUqu7N3IlTdO
-    expose:
-      - 8200
-    ports:
-      - 8200:8200
-    command: server -dev
 
-  
 volumes:
   postgres-db-volume:
   pgadmin-data:
